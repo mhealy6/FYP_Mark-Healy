@@ -15,7 +15,8 @@ services:
       - "9092:9092"
     environment:
       KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
-      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
+      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9092
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://localhost:9092
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
     depends_on:
       - zookeeper
@@ -42,10 +43,33 @@ services:
     depends_on:
       - influxdb
     environment:
-      - GF_SECURITY_ADMIN_USER=admin
-      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_SECURITY_ADMIN_USER: admin
+      - GF_SECURITY_ADMIN_PASSWORD: admin
     volumes:
       - grafana-data:/var/lib/grafana
+
+  producer:
+    build: ./kafka_producer
+    container_name: kafka_producer
+    depends_on:
+       - kafka
+    environment:
+       - KAFKA_BROKER: kafka:9092
+       - KAFKA_TOPIC: metrics
+    
+  consumer:
+    build: ./kafka_consumer
+    container_name: kafka_consumer
+    depends_on:
+      - kafka
+      - influxdb
+   environment:
+      - KAFKA_BROKER: kafka:9092
+      - KAFKA_TOPIC: metrics
+      - INFLUXDB_URL: http://influxdb:8086
+      - INFLUXDB_BUCKET: metrics
+      - INFLUXDB_ORG: org
+      - INFLUXDB_TOKEN: your_influxdb_token
 
 volumes:
   influxdb-data:
