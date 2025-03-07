@@ -1,23 +1,37 @@
 services:
+  
   zookeeper:
     image: confluentinc/cp-zookeeper:latest
+    hostname: zookeeper
     container_name: zookeeper
+    networks:
+      - finalyearproject_network
+    ports:
+      - "2181:2181"
     environment:
       ZOOKEEPER_CLIENT_PORT: 2181
       ZOOKEEPER_TICK_TIME: 2000
 
   kafka:
     image: confluentinc/cp-kafka:latest
+    hostname: kafka
     container_name: kafka
+    networks:
+      - finalyearproject_network
     ports:
       - "9092:9092"
+      - "29092:29092"
     environment:
+      KAFKA_BROKER_ID: 1
       KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
-      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9092
-      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://localhost:9092
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092,PLAINTEXT_HOST://localhost:29092
+      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9092,PLAINTEXT_HOST://0.0.0.0:29092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
     depends_on:
       - zookeeper
+    restart: unless-stopped
 
   influxdb:
     image: influxdb:2.7
@@ -49,15 +63,19 @@ services:
   producer:
     build: ./kafka_producer
     container_name: kafka_producer
+    networks:
+      - finalyearproject_network
     depends_on:
       - kafka
     environment:
       KAFKA_BROKER: kafka:9092
       KAFKA_TOPIC: metrics
-    
+
   consumer:
     build: ./kafka_consumer
     container_name: kafka_consumer
+    networks:
+      - finalyearproject_network
     depends_on:
       - kafka
       - influxdb
@@ -67,7 +85,11 @@ services:
       INFLUXDB_URL: http://influxdb:8086
       INFLUXDB_BUCKET: metrics
       INFLUXDB_ORG: org
-      INFLUXDB_TOKEN: your_influxdb_token
+      INFLUXDB_TOKEN: pJD-fJlSdpGwetGSAv5rbiV53dH6rgIJ6oj4QJ2TZgbcSQjY8wZ8OLjoro53AjqqU6l2eGbwNzpdvcuVB6h6cw==
+
+networks:
+  finalyearproject_network:
+    driver: bridge
 
 volumes:
   influxdb-data:
