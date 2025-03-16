@@ -17,7 +17,7 @@ KAFKA_TOPIC = "metrics"
 # InfluxDB Configuration
 INFLUX_HOSTNAME = "influxdb"  # Use Docker container name
 INFLUX_PORT = 8086
-INFLUX_URL = f"http://{INFLUX_HOSTNAME}:{INFLUX_PORT}"  # Ensure it resolves
+INFLUX_URL = f"http://{INFLUX_HOSTNAME}:{INFLUX_PORT}"
 INFLUX_TOKEN = "pJD-fJlSdpGwetGSAv5rbiV53dH6rgIJ6oj4QJ2TZgbcSQjY8wZ8OLjoro53AjqqU6l2eGbwNzpdvcuVB6h6cw=="
 INFLUX_ORG = "org"
 INFLUX_BUCKET = "metrics"
@@ -80,32 +80,34 @@ def connect_influxdb():
     exit(1)
 
 
-def write_test_data_to_influx():
-    """Writes test data directly to InfluxDB to verify connectivity."""
+def write_to_influxdb(data):
+    """Writes Kafka data into InfluxDB."""
     try:
-        point = (
-            Point("test_measurement")
-            .tag("source", "kafka_consumer")
-            .field("cpu_usage", float(42.0))  # Ensure float
-            .field("memory_usage", float(75.5))  # Ensure float
-            .field("process_count", float(3))  # Ensure float
-            .time(int(time.time_ns()))  # ✅ Nanosecond timestamp
-        )
+        # Convert np.float64 to float (Fix JSON serialization issue)
+        for key, value in data.items():
+            if isinstance(value, list):
+                data[key] = [float(v) if isinstance(v, (int, float)) else v for v in value]
+            elif isinstance(value, (int, float)):
+                data[key] = float(value)
+
+        point = Point(data["measurement"]).tag("source", "kafka_consumer")
+        
+        for key, value in data.items():
+            if key not in ["measurement", "timestamp"]:
+                point = point.field(key, value)
+
+        influx_timestamp = int(data["timestamp"]) if "timestamp" in data else int(time.time_ns())
+        point = point.time(influx_timestamp)
 
         write_api.write(bucket=INFLUX_BUCKET, org=INFLUX_ORG, record=point)
-        logger.info("✅ Successfully written TEST data directly to InfluxDB!")
+        logger.info(f"✅ Successfully written to InfluxDB: {data}")
+
     except Exception as e:
-        logger.error(f"❌ Failed to write TEST data to InfluxDB: {e}", exc_info=True)
-
-
-consumer = wait_for_kafka()
-influx_client, write_api = connect_influxdb()
-
-# ✅ Write test data before consuming Kafka messages
-write_test_data_to_influx()
+        logger.error(f"❌ Error writing to InfluxDB: {e}")
 
 
 def process_message(message):
+    """Processes and writes Kafka messages to InfluxDB."""
     try:
         decoded_value = message.value.decode('utf-8')
         logger.info(f"📩 Received from Kafka: {decoded_value}")
@@ -119,16 +121,14 @@ def process_message(message):
         else:
             influx_timestamp = int(time.time_ns())
 
-        # ✅ Force all numeric values to float to prevent field type conflicts
+        # Force all numeric values to float to prevent field type conflicts
         fields = {}
         for key, value in message_json.items():
             if key == "cpu_usage_per_core" and isinstance(value, list):
-                # Compute the overall CPU usage as the average of all cores
                 total_cpu_usage = sum(value) / len(value) if value else 0
-                fields["cpu_usage"] = float(total_cpu_usage)  # Store total CPU usage
-                # Store each core's usage as a separate field
+                fields["cpu_usage"] = float(total_cpu_usage)
                 for i, core_usage in enumerate(value):
-                    fields[f"cpu_core_{i}"] = float(core_usage)  # Store as separate fields
+                    fields[f"cpu_core_{i}"] = float(core_usage)
             elif key not in ["measurement", "timestamp"]:
                 try:
                     fields[key] = float(value) if isinstance(value, (int, float)) else value
@@ -150,11 +150,9 @@ def process_message(message):
         logger.error(f"❌ Error processing message: {e}", exc_info=True)
 
 
-# ✅ Ensure `while True:` is correctly indented
-while True:
-    try:
-        for message in consumer:
-            process_message(message)
-    except Exception as e:
-        logger.error(f"❌ Error consuming message: {e}", exc_info=True)
-        time.sleep(RETRY_INTERVAL)
+consumer = wait_for_kafka()
+influx_client, write_api = connect_influxdb()
+
+# ✅ Kafka Consumer Loop
+for message in consumer:
+    process_message(message)

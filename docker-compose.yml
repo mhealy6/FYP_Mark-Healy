@@ -70,7 +70,9 @@ services:
     environment:
       KAFKA_BROKER: kafka:9092
       KAFKA_TOPIC: metrics
-
+    volumes:
+      - "/:/hostfs:ro" 
+    
   consumer:
     build: ./kafka_consumer
     container_name: kafka_consumer

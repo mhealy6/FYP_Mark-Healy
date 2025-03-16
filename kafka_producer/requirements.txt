@@ -1,2 +1,4 @@
 kafka-python
 psutil
+speedtest-cli
+numpy
