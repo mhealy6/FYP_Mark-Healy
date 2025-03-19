@@ -71,7 +71,8 @@ services:
       KAFKA_BROKER: kafka:9092
       KAFKA_TOPIC: metrics
     volumes:
-      - "/:/hostfs:ro" 
+      - "/:/hostfs:ro"   
+      - /proc/meminfo:/host_proc/meminfo:ro
     
   consumer:
     build: ./kafka_consumer

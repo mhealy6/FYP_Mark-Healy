@@ -83,6 +83,7 @@ def connect_influxdb():
 def write_to_influxdb(data):
     """Writes Kafka data into InfluxDB."""
     try:
+        logger.info(f"🚀 [DEBUG] Writing to InfluxDB: {json.dumps(data, indent=2)}")
         # Convert np.float64 to float (Fix JSON serialization issue)
         for key, value in data.items():
             if isinstance(value, list):
@@ -121,7 +122,7 @@ def process_message(message):
         else:
             influx_timestamp = int(time.time_ns())
 
-        # Force all numeric values to float to prevent field type conflicts
+        # ✅ Flatten nested fields before writing
         fields = {}
         for key, value in message_json.items():
             if key == "cpu_usage_per_core" and isinstance(value, list):
@@ -129,6 +130,12 @@ def process_message(message):
                 fields["cpu_usage"] = float(total_cpu_usage)
                 for i, core_usage in enumerate(value):
                     fields[f"cpu_core_{i}"] = float(core_usage)
+            elif key == "load_average" and isinstance(value, list):  # ✅ Flatten list fields
+                for i, avg in enumerate(value):
+                    fields[f"load_average_{i}"] = float(avg)
+            elif isinstance(value, dict):  # ✅ Flatten dict fields
+                for sub_key, sub_value in value.items():
+                    fields[f"{key}_{sub_key}"] = float(sub_value) if isinstance(sub_value, (int, float)) else str(sub_value)
             elif key not in ["measurement", "timestamp"]:
                 try:
                     fields[key] = float(value) if isinstance(value, (int, float)) else value
@@ -137,6 +144,7 @@ def process_message(message):
 
         logger.info(f"📊 Processed Data: measurement={measurement}, fields={fields}, timestamp={influx_timestamp}")
 
+        # ✅ Send to InfluxDB after flattening
         point = Point(measurement).tag("source", "kafka_consumer")
         for key, value in fields.items():
             point = point.field(key, value)
@@ -148,7 +156,6 @@ def process_message(message):
 
     except Exception as e:
         logger.error(f"❌ Error processing message: {e}", exc_info=True)
-
 
 consumer = wait_for_kafka()
 influx_client, write_api = connect_influxdb()
