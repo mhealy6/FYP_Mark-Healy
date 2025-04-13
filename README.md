@@ -1,3 +1,8 @@
+Project description
+The proposed project focuses on setting up a monitoring system within the testbed that captures and visualizes performance metrics in real-time. The aim is to develop a software engineering solution that integrates several tools, such as Grafana for data visualization, a database to store performance measurements, and Kafka for real-time data streaming. This setup will allow the system to ingest, process, and display a wide range of metrics from the testbed, offering insight into various performance aspects such as CPU and memory usage, network throughput, and system resource allocation.
+
+For the demo, we will capture and visualize measurements from tools like htop, repl, and iperf. These metrics, such as system load, real-time processing data, and network bandwidth, will be displayed in Grafana, enabling easy analysis through dynamic dashboards. Using Docker, all services—including Grafana, Kafka, and the database—will be containerized to ensure easy deployment and scalability. This project will serve as a versatile platform for monitoring and performance optimization across different systems in the testbed, with potential applications in diagnosing network issues, identifying bottlenecks, and enhancing resource management.
+
 Real-Time System Monitoring Platform
 Overview
 This project is a full-stack real-time monitoring system that visualizes system performance metrics such as CPU, memory, disk I/O, and network bandwidth. The system uses a Python-based Kafka producer to gather metrics from the host machine and Docker containers, streams them to Kafka, where a Kafka consumer processes and writes them to InfluxDB. These are then visualized via Grafana dashboards with real-time updates.
