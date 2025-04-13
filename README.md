@@ -15,6 +15,7 @@ speedtest-cli (external internet speed)
 Dashboards update every 5 seconds and include threshold highlights, time filters, and user-friendly visual breakdowns across 17 real-time panels.
 
 Requirements:
+Linux 
 Docker
 
 Docker Compose
