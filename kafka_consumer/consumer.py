@@ -4,6 +4,7 @@ import logging
 import time
 import socket
 import json
+from statistics import mean
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
@@ -79,7 +80,7 @@ def connect_influxdb():
 def write_to_influxdb(data):
     """Writes Kafka data into InfluxDB."""
     try:
-        logger.info(f"🚀 [DEBUG] Writing to InfluxDB: {json.dumps(data, indent=2)}")
+        logger.info(f"[DEBUG] Writing to InfluxDB: {json.dumps(data, indent=2)}")
         for key, value in data.items():
             if isinstance(value, list):
                 data[key] = [float(v) if isinstance(v, (int, float)) else v for v in value]
@@ -111,6 +112,23 @@ def process_message(message):
         message_json = json.loads(decoded_value)
         measurement = message_json.get("measurement", "unknown")
         timestamp = message_json.get("timestamp", None)
+
+        delivery_latency_ms = None
+        if "timestamp" in message_json:
+            try:
+                sent_timestamp = int(message_json["timestamp"])
+                current_timestamp = int(time.time_ns())
+                delivery_latency_ms = round((current_timestamp - sent_timestamp) / 1e6, 2)
+                logger.info(f" Delivery Latency: {delivery_latency_ms} ms")
+            except Exception as e:
+                logger.warning(f" Failed to calculate delivery latency: {e}")
+
+        if delivery_latency_ms is not None:
+            delivery_latencies.append(delivery_latency_ms)
+            if len(delivery_latencies) >= 60:
+                avg_latency = mean(delivery_latencies[-60:])
+                logger.info(f" Avg Delivery Latency (last 60): {avg_latency:.2f} ms")
+
 
         if timestamp:
             influx_timestamp = int(timestamp) if timestamp > 10**12 else int(float(timestamp) * 1e9)
@@ -153,6 +171,7 @@ def process_message(message):
 
 consumer = wait_for_kafka()
 influx_client, write_api = connect_influxdb()
+delivery_latencies = []
 
 
 for message in consumer:

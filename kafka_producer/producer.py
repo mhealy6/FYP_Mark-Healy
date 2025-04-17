@@ -8,6 +8,8 @@ import speedtest
 import threading
 import os
 import psutil
+from statistics import mean
+import collections
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
@@ -300,29 +302,57 @@ def main():
     producer = wait_for_kafka()
     threading.Thread(target=send_network_metrics, args=(producer,), daemon=True).start()
 
+    latency_log = {
+        "system": [],
+        "iperf3": [],
+        "additional": []
+    }
+
     while True:
         try:
+          
+            start = time.perf_counter()
             system_metrics = get_system_metrics()
+            mid = time.perf_counter()
             producer.send(TOPIC, value=system_metrics)
             producer.flush()
-            logger.info(f" [SENT] System Metrics: {system_metrics}")
+            latency = (time.perf_counter() - start) * 1000
+            latency_log["system"].append(latency)
+            logger.info(f" [SENT] System Metrics (Latency: {latency:.2f} ms): {system_metrics}")
 
+           
+            start = time.perf_counter()
             iperf_metrics = get_iperf_metrics()
             if iperf_metrics:
                 producer.send(TOPIC, value=iperf_metrics)
                 producer.flush()
-                logger.info(f" [SENT] Docker Network Metrics: {iperf_metrics}")
+                latency = (time.perf_counter() - start) * 1000
+                latency_log["iperf3"].append(latency)
+                logger.info(f" [SENT] Docker Network Metrics (Latency: {latency:.2f} ms): {iperf_metrics}")
 
+           
+            start = time.perf_counter()
             additional_metrics = get_additional_metrics()
             if additional_metrics:
-                producer.send(TOPIC, value=additional_metrics)  
+                producer.send(TOPIC, value=additional_metrics)
                 producer.flush()
-                logger.info(f"[SENT] Additional Metrics: {additional_metrics}") 
+                latency = (time.perf_counter() - start) * 1000
+                latency_log["additional"].append(latency)
+                logger.info(f" [SENT] Additional Metrics (Latency: {latency:.2f} ms): {additional_metrics}")
+
+            
+            if len(latency_log["system"]) % 60 == 0:
+                logger.info("--- Latency Averages (last 60s) ---")
+                for key, values in latency_log.items():
+                    if values:
+                        avg = mean(values[-60:])
+                        logger.info(f"   {key.capitalize()} Avg Latency: {avg:.2f} ms")
 
         except Exception as e:
             logger.error(f" Error in producer loop: {e}")
 
-        time.sleep(1)  
+        time.sleep(1)
+
 
 if __name__ == "__main__":
     main()
